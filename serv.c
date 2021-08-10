@@ -42,10 +42,12 @@ int main(int ac, char **av)
 
 	sock_len = sizeof(sin);
 
+	printf("Socket is set-up, waiting for client to connect\n");
 	if ((csock = accept(sock, (SOCKADDR*)&sin, &sock_len)) == -1)
 		return (exit_fatal("Error while accept\n"));
 
-	closesocket(sock);
+	printf("Received connection from client\n");
+	close(sock);
 
 	return (0);
 }
