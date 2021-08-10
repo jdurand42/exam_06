@@ -6,9 +6,30 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+#include <string.h>
 
 typedef struct sockaddr_in SOCKADDR_IN;
 typedef struct sockaddr SOCKADDR;
+
+char *str_join(char *buf, char *add)
+{
+	char	*newbuf;
+	int		len;
+
+	if (buf == 0)
+		len = 0;
+	else
+		len = strlen(buf);
+	newbuf = malloc(sizeof(*newbuf) * (len + strlen(add) + 1));
+	if (newbuf == 0)
+		return (0);
+	newbuf[0] = 0;
+	if (buf != 0)
+		strcat(newbuf, buf);
+	free(buf);
+	strcat(newbuf, add);
+	return (newbuf);
+}
 
 int exit_fatal(char *s)
 {
@@ -21,8 +42,11 @@ int main(int ac, char **av)
 {
 	int sock, csock;
 	int ret = -1;
+	int i = 0;
 	SOCKADDR_IN sin;
 	socklen_t sock_len;
+	char b[256];
+	char sb[256];
 
 	while (ret)
 	{
@@ -48,6 +72,31 @@ int main(int ac, char **av)
 		}
 	}
 	printf("Client connected to %s:%d\n", "127.0.0.1", 8080);
+
+	if (recv(sock, b, 256, 0) == -1)
+		return (exit_fatal("Failed to Received message\n"));
+	printf("Received message: %s\n", b);
+
+	while (strcmp("exit", b))
+	{
+		bzero(b, 256);
+		i = 0;
+		while (read(0, sb, 1))
+		{
+			if (sb[0] != '\n' && i < 255)
+			{
+				b[i] = sb[0];
+				i++;
+			}
+			else
+				break ;
+		}
+		if ((send(sock, b, 256, 0)) == -1)
+			exit_fatal("Error while sending a message\n");
+		printf("sent: %s\n", b);
+		// shutdown(sock, 1);
+		//send
+	}
 
 	/*if ((csock = accept(sock, (SOCKADDR*)&sin, &sock_len)) == -1)
 		return (exit_fatal("Error while accept\n"));
