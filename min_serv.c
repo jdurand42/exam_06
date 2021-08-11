@@ -164,9 +164,27 @@ void delete_client(int fd)
 	// return (id);
 }
 
-void get_msg(int fd, char *s)
+void get_msg(int fd)
 {
-	printf("J'aime les messages\n");
+	// printf("J'aime les messages\n");
+	int i = 0;
+	int j = 0;
+
+	while (str[i])
+	{
+		tmp[j] = s[i];
+		j++;
+		if (s[i] == '\n')
+		{
+			sprintf(buffer, "client %d: %s", get_id(fd), tmp);
+			send_all(fd, buffer);
+			j = 0;
+			bzero(&tmp, sizeof(str));
+			bzero(&buffer, sizeof(buffer));
+		}
+		i++;
+	}
+	bzero(&str, sizeof(str));
 }
 
 void print_set()
@@ -258,7 +276,7 @@ int main(int ac, char **av)
 					}
 					else
 					{
-						printf("bonjour\n");
+						//printf("bonjour\n");
 						// we get a msg
 						get_msg(fd, str);
 					}
