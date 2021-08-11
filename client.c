@@ -7,6 +7,7 @@
 #include <sys/select.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <pthread.h>
 
 typedef struct sockaddr_in SOCKADDR_IN;
 typedef struct sockaddr SOCKADDR;
@@ -38,6 +39,36 @@ int exit_fatal(char *s)
 	return (EXIT_FAILURE);
 }
 
+void *read_loop(void *sock_fd)
+{
+	printf("yo\n");
+	char sb[256];
+	char rb[1];
+	bzero(&sb, sizeof(sb));
+	bzero(&rb, sizeof(rb));
+	int *fd = (int*)sock_fd;
+	while (1)
+	{
+		int i = 0;
+		i = 0;
+		while (read(0, rb, 1) > 0)
+		{
+			sb[i] = rb[0];
+			i++;
+			if (rb[0] == '\n')
+				break ;
+		}
+		sb[i] = 0;
+		printf("message: %s\n", sb);
+		if (send(*fd, sb, strlen(sb), 0) < 0)
+		{
+			printf("Error while sending\n");
+			pthread_exit(NULL);
+		}
+		shutdown(*fd, 1);
+	}
+}
+
 int main(int ac, char **av)
 {
 	int sock, csock;
@@ -47,6 +78,11 @@ int main(int ac, char **av)
 	socklen_t sock_len;
 	char b[256];
 	char sb[256];
+	char rb[1];
+	bzero(&sb, sizeof(sb));
+	bzero(&rb, sizeof(rb));
+	pthread_t thread;
+
 
 	while (ret)
 	{
@@ -72,12 +108,26 @@ int main(int ac, char **av)
 		}
 	}
 	printf("Client connected to %s:%d\n", "127.0.0.1", 8080);
+	int sock_b = sock;
 
-	if (recv(sock, b, 256, 0) == -1)
-		return (exit_fatal("Failed to Received message\n"));
-	printf("Received message: %s\n", b);
+	pthread_create(&thread, NULL, read_loop, (void*)&sock);
 
-	while (strcmp("exit", b))
+	while (1)
+	{
+		bzero(&b, sizeof(b));
+		ret = recv(sock, b, 256, 0);
+			// return (exit_fatal("Failed to Received message\n"));
+		/*if (ret == 0)
+		{
+			pthread_cancel(thread);
+			close(sock);
+			printf("Server offline\n");
+			return (0);
+		}*/
+		printf("Received message: %s----\n", b);
+	}
+
+	/*while (strcmp("exit", b))
 	{
 		bzero(b, 256);
 		i = 0;
@@ -91,17 +141,14 @@ int main(int ac, char **av)
 			else
 				break ;
 		}
+		b[i] = '\n';
 		if ((send(sock, b, 256, 0)) == -1)
 			exit_fatal("Error while sending a message\n");
-		printf("sent: %s\n", b);
+		printf("sent: %s", b);
 		// shutdown(sock, 1);
 		//send
-	}
+	}*/
 
-	/*if ((csock = accept(sock, (SOCKADDR*)&sin, &sock_len)) == -1)
-		return (exit_fatal("Error while accept\n"));
-	*/
 	close(sock);
-
 	return (0);
 }
