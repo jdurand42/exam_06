@@ -172,9 +172,9 @@ void get_msg(int fd)
 
 	while (str[i])
 	{
-		tmp[j] = s[i];
+		tmp[j] = str[i];
 		j++;
-		if (s[i] == '\n')
+		if (str[i] == '\n')
 		{
 			sprintf(buffer, "client %d: %s", get_id(fd), tmp);
 			send_all(fd, buffer);
@@ -278,7 +278,7 @@ int main(int ac, char **av)
 					{
 						//printf("bonjour\n");
 						// we get a msg
-						get_msg(fd, str);
+						// get_msg(fd, str);
 					}
 				}
 			}
