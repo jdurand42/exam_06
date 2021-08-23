@@ -261,8 +261,9 @@ int main(int ac, char **av)
 				else
 				{
 					// triger recv
-					if (recv(fd, str, ft_strlen(str), 0) <= 0)
+					if (recv(fd, str, sizeof(str), 0) <= 0)
 					{
+						printf("Here\n");
 						// if message reception <= like 0 char message -> means disconection
 						bzero(&msg, ft_strlen(msg));
 						// delete client from clients list + send message to all
@@ -276,9 +277,9 @@ int main(int ac, char **av)
 					}
 					else
 					{
-						//printf("bonjour\n");
+						printf("bonjour\n");
 						// we get a msg
-						// get_msg(fd, str);
+						get_msg(fd);
 					}
 				}
 			}
