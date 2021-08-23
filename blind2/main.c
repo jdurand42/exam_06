@@ -10,53 +10,54 @@
 
 typedef struct	s_client
 {
-	int	fd;
-	int	id;
+	int fd;
+	int id;
 	struct s_client *next;
 }								t_client;
 
-t_client *clients = NULL;
-int sock_fd, g_id;
 
-fd_set cpy_read, cpy_write, cli_set;
+int sock_fd;
+struct sockaddr_in servaddr, test;
+int g_id = 0;
+t_client *cli = NULL;
+
+fd_set cli_set, cpy_read, cpy_write;
 char msg[42];
 char str[42*4096], tmp[42*4096], buf[42*4096 + 42];
 
-
 void fatal()
 {
-	write(2, "Fatal error\n", 12);
+	write(2, "Fatal error\n", strlen("Fatal error\n"));
 	close(sock_fd);
 	exit(1);
 }
 
-int get_id(fd)
+int get_id(int fd)
 {
-	t_client *b_clients = clients;
+	t_client *b = cli;
 
-	while (b_clients)
+	while (b)
 	{
-		if (b_clients->fd == fd)
-			return (b_clients->id);
-		b_clients = b_clients->next;
+		if (b->fd == fd)
+			return (b->id);
+		b = b->next;
 	}
 	return (-1);
 }
 
 int get_max_fd()
 {
-	t_client *b_clients = clients;
-	int max_fd = sock_fd;
+	int max = sock_fd;
+	t_client *b = cli;
 
-	while (b_clients)
+	while (b)
 	{
-		if (b_clients->fd >= max_fd)
-			max_fd = b_clients->fd;
-		b_clients = b_clients->next;
+		if (max <= b->fd)
+			max = b->fd;
+		b = b->next;
 	}
-	return (max_fd);
+	return (max);
 }
-
 /*
 int extract_message(char **buf, char **msg)
 {
@@ -108,17 +109,13 @@ char *str_join(char *buf, char *add)
 
 void send_all(int fd, char *s)
 {
-	t_client *b = clients;
+	t_client *b = cli;
 
 	while (b)
 	{
-		// we check if fd != and
-		// IF FD is READY for writing
 		if (b->fd != fd && FD_ISSET(b->fd, &cpy_write))
 		{
-			// we send message
-			// strlen here for not sending whole buffer i guess
-			if (send(b->fd, s, strlen(s), 0) <= 0)
+			if (send(b->fd, s, strlen(s), 0) < 0)
 				fatal();
 		}
 		b = b->next;
@@ -127,72 +124,67 @@ void send_all(int fd, char *s)
 
 int add_client_to_list(fd)
 {
-	// add client_to list
-	t_client *b_clients = clients;
-	t_client *new_client = NULL;
-	if (!(new_client = malloc(sizeof(t_client))))
+	t_client *b = cli;
+	t_client *new = NULL;
+
+	g_id++;
+	int id = g_id;
+
+	if (!(new = malloc(sizeof(t_client))))
 		fatal();
 
-	new_client->fd = fd;
-	g_id++;
-	new_client->id = g_id;
-	new_client->next = NULL;
-
-	if (!b_clients)
-		clients = new_client;
+	new->next = NULL;
+	new->id = id;
+	new->fd = fd;
+	if (!b)
+	{
+		cli = new;
+	}
 	else
 	{
-		while (b_clients->next)
-			b_clients = b_clients->next;
-		b_clients->next = new_client;
+		while (b->next)
+			b = b->next;
+		b->next = new;
 	}
-	return (new_client->id);
+	return (id);
 }
 
 void add_client()
 {
-	// add client does -> accept
-	// -> add client to list
-	// -> send msg to all
-	// -> add client to set
-	struct sockaddr_in cli;
-	socklen_t len = sizeof(cli);
-	int id = 0;
-	int fd = accept(sock_fd, (struct sockaddr *)&cli, &len);
-	if (fd < 0) {
-				printf("server acccept failed...\n");
-				fatal();
-	}
-	id = add_client_to_list(fd);
+	struct sockaddr_in cli_fd;
+	socklen_t len = sizeof(cli_fd);
+	int fd = accept(sock_fd, (struct sockaddr *)&cli_fd, &len);
+	if (fd < 0)
+		fatal();
+	int id = add_client_to_list(fd);
+	bzero(&msg, sizeof(msg));
 	sprintf(msg, "server: client %d just arrived\n", id);
-	printf("%s", msg);
 	send_all(fd, msg);
 	FD_SET(fd, &cli_set);
 }
 
-int rm_client_from_list(fd)
+int rm_client_from_list(int fd)
 {
-	int id = 0;
-	t_client *b = clients;
+	t_client *b = cli;
 	t_client *del = NULL;
+	int id = 0;
 
 	if (b && b->fd == fd)
 	{
-		clients = b->next;
 		id = b->id;
-		free (b);
+		cli = b->next;
+		free(b);
 	}
 	else
 	{
 		while (b && b->next)
 		{
-			if (fd == b->next->fd)
+			if (b->next->fd == fd)
 			{
-				id = b->next->id;
 				del = b->next;
+				id = del->id;
 				b->next = del->next;
 				free(del);
-				break ;
 			}
 			b = b->next;
 		}
@@ -200,55 +192,44 @@ int rm_client_from_list(fd)
 	return (id);
 }
 
-void rm_client(fd)
+void rm_client(int fd)
 {
-	// we get id,
-	// we send message to all
-	// we detelete client from list
-	// we delete client from set
-	// we close fd for leaks
 	int id = rm_client_from_list(fd);
+	bzero(&msg, sizeof(msg));
 	sprintf(msg, "server: client %d just disconnected\n", id);
 	send_all(fd, msg);
-	// rm_client_from_list(fd);
 	FD_CLR(fd, &cli_set);
 	close(fd);
 }
 
-void ex_msg(int fd)
+void ex_msg(int fd, char *s)
 {
 	int i = 0;
 	int j = 0;
 
 	while (str[i])
 	{
-		// we use tmp a pre buffer to write until \n in buf
 		tmp[j] = str[i];
 		j++;
 		if (str[i] == '\n')
 		{
 			sprintf(buf, "client %d: %s", get_id(fd), tmp);
 			send_all(fd, buf);
-			// restart tmp
 			j = 0;
-			// bzero buf and tmp
 			bzero(&tmp, strlen(tmp));
-			bzero(&buf, strlen(buf));
+			bzero(&str, strlen(str));
 		}
 		i++;
 	}
-	// don't forget to bero str as well lol
-	bzero(&str, strlen(str));
 }
 
 int main(int ac, char **av) {
-	struct sockaddr_in servaddr, cli;
-	int port = 0;
 	if (ac != 2)
 	{
-		write(2, "Wrong number of arguments\n", 26);
-		exit(1);
+		write(2, "Wrong number of arguments\n", strlen("Wrong number of arguments\n"));
+		return (1);
 	}
+
 	// socket create and verification
 	sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock_fd == -1) {
@@ -263,7 +244,6 @@ int main(int ac, char **av) {
 
 	// Binding newly created socket to given IP and verification
 	if ((bind(sock_fd, (const struct sockaddr *)&servaddr, sizeof(servaddr))) != 0) {
-		printf("fatal in bind\n");
 		fatal();
 	}
 	if (listen(sock_fd, 10) != 0) {
@@ -272,72 +252,53 @@ int main(int ac, char **av) {
 
 	FD_ZERO(&cli_set);
 	FD_SET(sock_fd, &cli_set);
-	bzero(&tmp, sizeof(tmp));
-	bzero(&str, sizeof(str));
 	bzero(&msg, sizeof(msg));
+	bzero(&str, sizeof(str));
+	bzero(&tmp, sizeof(tmp));
 	bzero(&buf, sizeof(buf));
 
 	while (1)
 	{
-		cpy_write = cpy_read = cli_set;
-		// select, if < 0 means no fd is ready
-		// select will copy all ready fd in cpy_read
+		cpy_read = cpy_write = cli_set;
 		if (select(get_max_fd() + 1, &cpy_read, &cpy_write, NULL, NULL) < 0)
 			continue ;
-		// iterate on all fds
 		for (int fd = 0; fd < get_max_fd() + 1; fd++)
 		{
-			// if iterated fd is a member of cpy_read
 			if (FD_ISSET(fd, &cpy_read))
 			{
-				// if sock_fd == fd -> means client is trying to connect
-				// else means client sent a message or disconnected
 				if (fd == sock_fd)
 				{
-					// we add_client
-					// we break the loop
-					printf("client tried to connect\n");
-					bzero(&msg, sizeof(msg));
+					// printf("Bonjour\n");
 					add_client();
 					break ;
 				}
 				else
 				{
-					// we recv with str as buffer
 					if (recv(fd, str, sizeof(str), 0) <= 0)
 					{
-						// client disconnected
-						// we rm client, message if sent there
-						// we clear fd from the set
-						// we close fd and we break
-						printf("client disconnected\n");
-						bzero(&msg, sizeof(msg));
+						// printf("deco\n");
 						rm_client(fd);
 						break ;
+					// disconnect
 					}
-					// else means message received is longer than 0 char -> not a disconnect
 					else
 					{
-						printf("message received\n");
-						ex_msg(fd);
+					// receive msg;
+						ex_msg(fd, str);
 					}
 				}
 			}
 		}
 	}
 
-
-	// while (read(0, str, 1));
-
-	/*socklen_t len = sizeof(cli);
-	int connfd = accept(sock_fd, (struct sockaddr *)&cli, &len);
+	/*socklen_t len = sizeof(test);
+	int connfd = accept(sock_fd, (struct sockaddr *)&test, &len);
 	if (connfd < 0) {
         printf("server acccept failed...\n");
         exit(0);
     }
     else
-        printf("server acccept the client...\n");
-	*/
-	close(sock_fd);
-	return (0);
+        printf("server acccept the client...\n");*/
+		close(sock_fd);
+		return (0);
 }
