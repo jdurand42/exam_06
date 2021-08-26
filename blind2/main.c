@@ -122,7 +122,7 @@ void send_all(int fd, char *s)
 	}
 }
 
-int add_client_to_list(fd)
+int add_client_to_list(int fd)
 {
 	t_client *b = cli;
 	t_client *new = NULL;
