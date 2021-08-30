@@ -21,12 +21,22 @@ fd_set set, cpy_read, cpy_write;
 int g_id = 0;
 struct sockaddr_in servaddr;
 t_client *cli = NULL;
-char msg[42], str[42*4096],tmp[42*4096],buf[42*4096+42];
+char msg[42], str[42*4096];
 
 void fatal()
 {
+	t_client *b;
+
 	write(2, "Fatal error\n", strlen("Fatal error\n"));
 	close(sockfd);
+	while (cli)
+	{
+		b = cli->next;
+		close(cli->fd);
+		free(cli);
+		cli = b;
+	}
+
 	exit (1);
 }
 
@@ -50,7 +60,7 @@ int get_max_fd()
 
 	while (b)
 	{
-		if (b->fd >= max)
+		if (b->fd > max)
 			max = b->fd;
 		b = b->next;
 	}
@@ -65,8 +75,7 @@ void send_all(int fd, char *s)
 	{
 		if (b->fd != fd && FD_ISSET(b->fd, &cpy_write))
 		{
-			if (send(b->fd, s, strlen(s), 0) < 0)
-				fatal();
+			send(b->fd, s, strlen(s), 0);
 		}
 		b = b->next;
 	}
@@ -98,10 +107,8 @@ int add_client_to_list(int fd)
 
 void add_client()
 {
-	struct sockaddr_in cli;
 	int connfd;
-	socklen_t len = sizeof(cli);
-	connfd = accept(sockfd, (struct sockaddr *)&cli, &len);
+	connfd = accept(sockfd, NULL, NULL);
 	if (connfd < 0) {
 				fatal();
 	}
@@ -121,7 +128,7 @@ int rm_client_from_list(int fd)
 	if (b && b->fd == fd)
 	{
 		cli = b->next;
-		close(b->fd);
+		// close(b->fd);
 		id = b->id;
 		free(b);
 	}
@@ -132,11 +139,12 @@ int rm_client_from_list(int fd)
 			if (b->next->fd == fd)
 			{
 				del = b->next;
-				close(del->fd);
+				// close(del->fd);
 				id = del->id;
 				b->next = del->next;
 				free(del);
 			}
+			b = b->next;
 		}
 	}
 	return (id);
@@ -144,32 +152,42 @@ int rm_client_from_list(int fd)
 
 void rm_client(int fd)
 {
+	FD_CLR(fd, &set);
+	close(fd);
 	int id = rm_client_from_list(fd);
 	bzero(&msg, sizeof(msg));
 	sprintf(msg, "server: client %d disconnected\n", id);
 	send_all(fd, msg);
-	FD_CLR(fd, &set);
+
 }
 
 void ex_msg(int fd)
 {
 	int i = 0;
-	int j = 0;
+
+	char b[5000000] = {0};
+	// char tmp[5000000] = {0};
+	char announce[64];
+
+	sprintf(announce, "client %d: ", get_id(fd));
+	strcat(b, announce);
+	int j = strlen(b);
 
 	while (str[i])
 	{
-		tmp[j] = str[i];
-		j++;
+		b[j] = str[i];
 		if  (str[i] == '\n')
 		{
-			j = 0;
-			bzero(&buf, strlen(buf));
-			sprintf(buf, "client %d: %s", get_id(fd), tmp);
-			send_all(fd, buf);
-			bzero(&tmp, strlen(tmp));
+			if (str[i + 1])
+			{
+				strcat(b, announce);
+				j += strlen(announce);
+			}
 		}
 		i++;
+		j++;
 	}
+	send_all(fd, b);
 	bzero(&str, strlen(str));
 }
 
@@ -201,9 +219,7 @@ int main(int ac, char **av) {
 	}
 
 	bzero(&msg, sizeof(msg));
-	bzero(&buf, sizeof(buf));
 	bzero(&str, sizeof(str));
-	bzero(&tmp, sizeof(tmp));
 	FD_ZERO(&set);
 	FD_SET(sockfd, &set);
 
@@ -212,27 +228,28 @@ int main(int ac, char **av) {
 		cpy_read = cpy_write = set;
 		if (select(get_max_fd() + 1, &cpy_read, &cpy_write, NULL, NULL) < 0)
 			continue ;
-		for (int fd = 0; fd < get_max_fd() + 1; fd++)
+		if (FD_ISSET(sockfd, &cpy_read))
 		{
-			if (FD_ISSET(fd, &cpy_read))
+			add_client();
+			continue ;
+		}
+		for (t_client *b = cli; b != NULL; b = b->next)
+		{
+			int ret;
+			if (FD_ISSET(b->fd, &cpy_read))
 			{
-				if (fd == sockfd)
+				ret = recv(b->fd, str, sizeof(str), 0);
+				if (ret > 0)
 				{
-					add_client();
+					ex_msg(b->fd);
 					break ;
 				}
-				if (recv(fd, str, sizeof(str), 0) <= 0)
+				else if (ret == 0)
 				{
-					// printf("Deco\n");
-					rm_client(fd);
-					test++;
+					rm_client(b->fd);
 					break ;
-					// rm_client(fd);
 				}
-				else
-				{
-					ex_msg(fd);
-				}
+				break ;
 			}
 		}
 	}
