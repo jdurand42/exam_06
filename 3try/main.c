@@ -13,22 +13,15 @@ typedef struct s_client
 {
 	int fd;
 	int id;
+	char *content;
 	struct s_client *next;
 }							t_client;
-
-typedef struct s_msg
-{
-	int sender_fd;
-	char *content;
-	struct s_msg *next;
-}				t_msg;
 
 int sockfd;
 fd_set set, cpy_read, cpy_write;
 int g_id = 0;
 struct sockaddr_in servaddr;
 t_client *cli = NULL;
-t_msg *queue = NULL;
 char msg[42], str[5000000];
 
 void fatal()
@@ -41,6 +34,8 @@ void fatal()
 	{
 		b = cli->next;
 		close(cli->fd);
+		if (cli->content)
+			free(cli->content);
 		free(cli);
 		cli = b;
 	}
@@ -94,11 +89,12 @@ int add_client_to_list(int fd)
 	t_client *b = cli;
 	t_client *new = NULL;
 
-	if (!(new = malloc(sizeof(cli))))
+	if (!(new = malloc(sizeof(t_client))))
 		fatal();
 	new->fd = fd;
 	new->id = g_id;
 	new->next = NULL;
+	new->content = NULL;
 	g_id++;
 	if (!b)
 	{
@@ -113,26 +109,6 @@ int add_client_to_list(int fd)
 	return (new->id);
 }
 
-void add_client_to_queue(int fd)
-{
-	t_msg *b = queue;
-	t_msg *new = NULL;
-
-	if (!(new = malloc(sizeof(t_msg))))
-		fatal();
-	new->sender_fd = fd;
-	new->next = NULL;
-	new->content = NULL;
-	if (!b)
-		queue = new;
-	else
-	{
-		while (b->next)
-			b = b->next;
-		b->next = new;
-	}
-}
-
 void add_client()
 {
 	int connfd;
@@ -141,7 +117,7 @@ void add_client()
 				fatal();
 	}
 	int id = add_client_to_list(connfd);
-	add_client_to_queue(connfd);
+	// add_client_to_queue(connfd);
 	bzero(&msg, sizeof(msg));
 	sprintf(msg, "server: client %d just arrived\n", id);
 	send_all(connfd, msg);
@@ -159,6 +135,8 @@ int rm_client_from_list(int fd)
 		cli = b->next;
 		// close(b->fd);
 		id = b->id;
+		if (b->content)
+			free(b->content);
 		free(b);
 	}
 	else
@@ -179,40 +157,11 @@ int rm_client_from_list(int fd)
 	return (id);
 }
 
-void rm_client_from_queue(int fd)
-{
-	t_msg *b = queue;
-	t_msg *del = NULL;
-
-	if (b && b->sender_fd == fd)
-	{
-		queue = b->next;
-		if (b->content)
-			free(b->content);
-		free(b);
-	}
-	else
-	{
-		while (b && b->next)
-		{
-			if (b->next->sender_fd == fd)
-			{
-				del = b->next;
-				b->next = del->next;
-				if (del->content)
-					free(del->content);
-				free(del);
-			}
-			b = b->next;
-		}
-	}
-}
-
 void rm_client(int fd)
 {
 	FD_CLR(fd, &set);
 	int id = rm_client_from_list(fd);
-	rm_client_from_queue(id);
+	// rm_client_from_queue(id);
 	close(fd);
 	bzero(&msg, sizeof(msg));
 	sprintf(msg, "server: client %d disconnected\n", id);
@@ -299,7 +248,7 @@ void ex_msg(int fd)
 {
 	int i = 0;
 	int j = 0;
-	t_msg *b = queue;
+	t_client *b = cli;
 	char announce[64] = {0};
 	char *to_send = NULL;
 	char tmp[5000000] = {0};
@@ -307,39 +256,44 @@ void ex_msg(int fd)
 	sprintf(announce, "client %d: ", get_id(fd));
 	while (b)
 	{
-		if (b->sender_fd == fd && b->content)
+		if (b->fd == fd)
 		{
-			to_send = ft_strjoin(to_send, b->content);
-			free(b->content);
-			b->content = NULL;
-			break ;
-		}
-		else if (b->sender_fd == fd && !b->content)
-		{
-			to_send = ft_strjoin(to_send, announce);
+			if (!b->content)
+				to_send = ft_strdup(announce);
 			break ;
 		}
 		b = b->next;
 	}
-
+	// printf("ici: %s", str);
 	while (str[i])
 	{
 		tmp[j] = str[i];
 		j++;
 		if (str[i] == '\n')
 		{
-			to_send = ft_strjoin(to_send, tmp);
-			send_all(fd, to_send);
-			bzero(&tmp, strlen(tmp));
+			// printf("tmp: %s", tmp);
 			j = 0;
+			if (!b->content)
+				to_send = ft_strjoin(announce, tmp);
+			else if (b->content)
+			{
+				printf("here\n");
+				to_send = ft_strjoin(b->content, tmp);
+			}
+			bzero(&tmp, strlen(tmp));
+			send_all(fd, to_send);
 			free(to_send);
-			to_send = NULL;
-			to_send = ft_strjoin(to_send, announce);
 		}
 		i++;
 	}
 	if (strlen(tmp))
+	{
+		if (!b->content)
+			b->content = ft_strdup(announce);
 		b->content = ft_strjoin(b->content, tmp);
+		printf("here2: %s\n", b->content);
+	}
+	bzero(&tmp, strlen(tmp));
 	bzero(&str, strlen(str));
 }
 
