@@ -169,36 +169,6 @@ void rm_client(int fd)
 
 }
 
-/*void ex_msg(int fd)
-{
-	int i = 0;
-
-	char b[5000000] = {0};
-	// char tmp[5000000] = {0};
-	char announce[64];
-
-	sprintf(announce, "client %d: ", get_id(fd));
-	strcat(b, announce);
-	int j = strlen(b);
-
-	while (str[i])
-	{
-		b[j] = str[i];
-		if  (str[i] == '\n')
-		{
-			if (str[i + 1])
-			{
-				strcat(b, announce);
-				j += strlen(announce);
-			}
-		}
-		i++;
-		j++;
-	}
-	send_all(fd, b);
-	bzero(&str, strlen(str));
-}*/
-
 char *ft_strdup(char *s)
 {
 	int i = 0;
@@ -276,10 +246,7 @@ void ex_msg(int fd)
 			if (!b->content)
 				to_send = ft_strjoin(announce, tmp);
 			else if (b->content)
-			{
-				printf("here\n");
 				to_send = ft_strjoin(b->content, tmp);
-			}
 			bzero(&tmp, strlen(tmp));
 			send_all(fd, to_send);
 			free(to_send);
