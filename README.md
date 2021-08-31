@@ -1,7 +1,22 @@
+NOTES:
+Il y a un petit piege, quelque chose de pas dit dans le sujet dans le sujet
+le test peut envoyer un message en plusieurs parties, sans le terminer par un \n
+il ne faut pas l imprimer jusqu a avoir un \n dans le prochain msg
+
+pour tester:
+printf "%s" "msg sans newline" > file1
+(ou echo -n)
+echo "END qvec newline" > file2
+nc localhost port < file1 < file2
+
+doit afficher ->
+client %d: msg sans newlineEND qvec newline
+
+
 # exam_06
 exam 06 of 42
 
-ssignment name  : mini_serv
+assignment name  : mini_serv
 Expected files   : mini_serv.c
 Allowed functions: write, close, select, socket, accept, listen, send, recv, bind, strstr, malloc, realloc, free, calloc, bzero, atoi, sprintf, strlen, exit, strcpy, strcat, memset
 --------------------------------------------------------------------------------
