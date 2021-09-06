@@ -12,6 +12,9 @@ nc localhost port < file1 < file2
 doit afficher ->
 client %d: msg sans newlineEND qvec newline
 
+Notes: Dans la session exam, nc ne marche pas tout a fait pareil et donc tester comme ca ne marche pas, 
+On est un oeu obligé de coder ca quasi a l'aveugle
+
 
 # exam_06
 exam 06 of 42
